@@ -1,0 +1,8 @@
+opencv-python-headless
+numpy
+scikit-learn
+matplotlib
+cuml
+cupy-cuda12x
+Tcl
+tk
