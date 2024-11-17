@@ -127,8 +127,14 @@ app.layout = html.Div(
     [Input("2d-scatter-plot", "hoverData"), Input("3d-scatter-plot", "hoverData")],
 )
 def display_hover_image(hoverData2D, hoverData3D):
-    hoverData = hoverData2D if hoverData2D else hoverData3D
-    if hoverData is None:
+    # Determine which hoverData is active
+    if hoverData2D:
+        hoverData = hoverData2D
+        df = df_plot_2d  # Use 2D plot data
+    elif hoverData3D:
+        hoverData = hoverData3D
+        df = df_plot_3d  # Use 3D plot data
+    else:
         return html.Div("Hover over a point to see the image.")
 
     try:
@@ -137,7 +143,7 @@ def display_hover_image(hoverData2D, hoverData3D):
             return html.Div("Hover data not available.")
 
         # Get file path of hovered point
-        image_path = df_plot_2d["file_path"].iloc[point_index]
+        image_path = df["file_path"].iloc[point_index]
         print(f"Hovered image: {image_path}")
 
         # Load and encode image for display
