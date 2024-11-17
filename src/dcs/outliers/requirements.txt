@@ -1,8 +1,7 @@
 opencv-python-headless
 numpy
+pandas
 scikit-learn
-matplotlib
-cuml
-cupy-cuda12x
-Tcl
-tk
+plotly
+dash
+pillow
