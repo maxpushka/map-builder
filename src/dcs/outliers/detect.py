@@ -9,9 +9,7 @@ from PIL import Image
 import base64
 import io
 import time
-
-from common import pca_dbscan, feature_file, image_paths
-
+import common
 
 # Function to extract features
 def extract_features(image_path):
@@ -46,79 +44,39 @@ def extract_features(image_path):
     return (image_path, features)
 
 
-# Load features from CSV if available, else extract and save
-if os.path.exists(feature_file):
-    # Load features and image paths from CSV
-    df = pd.read_csv(feature_file)
-    feature_list = df.iloc[:, 1:].values  # Skip first column (file paths)
-    image_paths = df["file_path"].tolist()
-    print(f"Loaded features from {feature_file}")
-else:
-    print(f"Feature file {feature_file} not found. Extracting features from images...")
-    # Extract features concurrently
-    feature_list = []
+def load_features(feature_file, image_paths):
+    # Load features from CSV if available, else extract and save
+    if os.path.exists(feature_file):
+        # Load features and image paths from CSV
+        df = pd.read_csv(feature_file)
+        feature_list = df.iloc[:, 1:].values  # Skip first column (file paths)
+        image_paths = df["file_path"].tolist()
+        print(f"Loaded features from {feature_file}")
+    else:
+        print(f"Feature file {feature_file} not found. Extracting features from images...")
+        # Extract features concurrently
+        feature_list = []
 
-    with ThreadPoolExecutor() as executor:
-        future_to_path = {
-            executor.submit(extract_features, path): path for path in image_paths
-        }
+        with ThreadPoolExecutor() as executor:
+            future_to_path = {
+                executor.submit(extract_features, path): path for path in image_paths
+            }
 
-        start_time = time.time()
-        for i, future in enumerate(as_completed(future_to_path), start=1):
-            image_path, features = future.result()
-            if features is not None:
-                feature_list.append([image_path] + list(features))
-        elapsed_time = time.time() - start_time
-        print(f"Feature extraction finished in {elapsed_time:.2f} seconds")
+            start_time = time.time()
+            for i, future in enumerate(as_completed(future_to_path), start=1):
+                image_path, features = future.result()
+                if features is not None:
+                    feature_list.append([image_path] + list(features))
+            elapsed_time = time.time() - start_time
+            print(f"Feature extraction finished in {elapsed_time:.2f} seconds")
 
-    # Convert to DataFrame and save
-    columns = ["file_path"] + [f"feature_{i}" for i in range(len(feature_list[0]) - 1)]
-    df = pd.DataFrame(feature_list, columns=columns)
-    df.to_csv(feature_file, index=False)
-    feature_list = df.iloc[:, 1:].values
-    print("Extracted features and saved to features.csv")
-
-dbscan_labels, X_pca_2d, X_pca_3d = pca_dbscan(feature_list)
-
-# Create DataFrames for plotting
-df_plot_2d = pd.DataFrame(X_pca_2d, columns=["PCA1", "PCA2"])
-df_plot_2d["Cluster"] = dbscan_labels
-df_plot_2d["file_path"] = image_paths
-
-df_plot_3d = pd.DataFrame(X_pca_3d, columns=["PCA1", "PCA2", "PCA3"])
-df_plot_3d["Cluster"] = dbscan_labels
-df_plot_3d["file_path"] = image_paths
-
-# Initialize Dash app
-app = Dash(__name__)
-
-# Layout with both 2D and 3D graphs
-app.layout = html.Div(
-    [
-        dcc.Graph(
-            id="2d-scatter-plot",
-            figure=px.scatter(
-                df_plot_2d,
-                x="PCA1",
-                y="PCA2",
-                color="Cluster",
-                title="2D PCA with DBSCAN Clustering",
-            ),
-        ),
-        dcc.Graph(
-            id="3d-scatter-plot",
-            figure=px.scatter_3d(
-                df_plot_3d,
-                x="PCA1",
-                y="PCA2",
-                z="PCA3",
-                color="Cluster",
-                title="3D PCA with DBSCAN Clustering",
-            ),
-        ),
-        html.Div(id="hover-image", style={"textAlign": "center", "marginTop": 20}),
-    ]
-)
+        # Convert to DataFrame and save
+        columns = ["file_path"] + [f"feature_{i}" for i in range(len(feature_list[0]) - 1)]
+        df = pd.DataFrame(feature_list, columns=columns)
+        df.to_csv(feature_file, index=False)
+        feature_list = df.iloc[:, 1:].values
+        print("Extracted features and saved to features.csv")
+    return (feature_list, image_paths)
 
 
 # Hover callback for both plots
@@ -170,4 +128,46 @@ def display_hover_image(hoverData2D, hoverData3D):
 
 # Run the app
 if __name__ == "__main__":
+    feature_list, image_paths = load_features(common.feature_file, common.image_paths)
+    dbscan_labels, X_pca_2d, X_pca_3d = common.pca_dbscan(feature_list)
+
+    # Create DataFrames for plotting
+    df_plot_2d = pd.DataFrame(X_pca_2d, columns=["PCA1", "PCA2"])
+    df_plot_2d["Cluster"] = dbscan_labels
+    df_plot_2d["file_path"] = image_paths
+
+    df_plot_3d = pd.DataFrame(X_pca_3d, columns=["PCA1", "PCA2", "PCA3"])
+    df_plot_3d["Cluster"] = dbscan_labels
+    df_plot_3d["file_path"] = image_paths
+
+    # Initialize Dash app
+    app = Dash(__name__)
+
+    # Layout with both 2D and 3D graphs
+    app.layout = html.Div(
+        [
+            dcc.Graph(
+                id="2d-scatter-plot",
+                figure=px.scatter(
+                    df_plot_2d,
+                    x="PCA1",
+                    y="PCA2",
+                    color="Cluster",
+                    title="2D PCA with DBSCAN Clustering",
+                ),
+            ),
+            dcc.Graph(
+                id="3d-scatter-plot",
+                figure=px.scatter_3d(
+                    df_plot_3d,
+                    x="PCA1",
+                    y="PCA2",
+                    z="PCA3",
+                    color="Cluster",
+                    title="3D PCA with DBSCAN Clustering",
+                ),
+            ),
+            html.Div(id="hover-image", style={"textAlign": "center", "marginTop": 20}),
+        ]
+    )
     app.run_server(debug=True)
