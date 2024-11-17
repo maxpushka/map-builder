@@ -3,7 +3,7 @@ import pygetwindow
 import pydirectinput
 import time
 import os
-from coordinate_iterator import MGRSCoordinateIterator
+from coordinate_iterator import MGRSCoordinateIterator, skip_sea_coordinates
 
 
 window_title = "Digital Combat Simulator"
@@ -33,8 +33,9 @@ coord_iterator = MGRSCoordinateIterator(
     end_zone=37,
     start_letter="T",
     end_letter="T",
-    start_square="FJ",
-    end_square="FJ",
+    start_square="FH",
+    end_square="FH",
+    skip_low_value_func=skip_sea_coordinates,
 )
 
 
