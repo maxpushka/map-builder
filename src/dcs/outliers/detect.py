@@ -78,6 +78,8 @@ def load_features(feature_file, image_paths):
         print("Extracted features and saved to features.csv")
     return (feature_list, image_paths)
 
+# Initialize Dash app
+app = Dash(__name__)
 
 # Hover callback for both plots
 @app.callback(
@@ -102,7 +104,7 @@ def display_hover_image(hoverData2D, hoverData3D):
 
         # Get file path of hovered point
         image_path = df["file_path"].iloc[point_index]
-        print(f"Hovered image: {image_path}")
+        # print(f"Hovered image: {image_path}")
 
         # Load and encode image for display
         image = Image.open(image_path)
@@ -139,9 +141,6 @@ if __name__ == "__main__":
     df_plot_3d = pd.DataFrame(X_pca_3d, columns=["PCA1", "PCA2", "PCA3"])
     df_plot_3d["Cluster"] = dbscan_labels
     df_plot_3d["file_path"] = image_paths
-
-    # Initialize Dash app
-    app = Dash(__name__)
 
     # Layout with both 2D and 3D graphs
     app.layout = html.Div(
