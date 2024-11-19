@@ -1,117 +1,108 @@
+from dataclasses import dataclass
 import cv2
 import numpy as np
-import pyautogui
-
-from common import crop_image, parse_coordinates
+from common import MGRSCoordinates, MRGSRelativePosition, Tile, crop_image
 
 
-# Function to blend images with given offsets
-def overlay_images(image_a, image_b, x_offset, y_offset, opacity=1.0):
-    # Calculate canvas size to fit both images fully
-    canvas_width = max(image_a.shape[1], image_b.shape[1] + abs(x_offset))
-    canvas_height = max(image_a.shape[0], image_b.shape[0] + abs(y_offset))
+def stitch_images(tile_a: Tile, tile_b: Tile, opacity=1.0):
+    # Determine the relative position of tile_b with respect to tile_a
+    position = tile_a.mgrs_coord.position(tile_b.mgrs_coord)
 
-    # Create a blank canvas based on the calculated size
+    # Calculate x and y offsets based on points of interest in `Tile`
+    if position == MRGSRelativePosition.ABOVE:
+        offset = tile_a.top_left - tile_b.bottom_left
+    elif position == MRGSRelativePosition.BELOW:
+        offset = tile_a.bottom_left - tile_b.top_left
+    elif position == MRGSRelativePosition.LEFT:
+        offset = tile_a.top_left - tile_b.top_right
+    elif position == MRGSRelativePosition.RIGHT:
+        offset = tile_a.top_right - tile_b.top_left
+    elif position == MRGSRelativePosition.ABOVE_LEFT:
+        offset = tile_a.top_left - tile_b.bottom_right
+    elif position == MRGSRelativePosition.ABOVE_RIGHT:
+        offset = tile_a.top_right - tile_b.bottom_left
+    elif position == MRGSRelativePosition.BELOW_LEFT:
+        offset = tile_a.bottom_left - tile_b.top_right
+    elif position == MRGSRelativePosition.BELOW_RIGHT:
+        offset = tile_a.bottom_right - tile_b.top_left
+    else:
+        raise ValueError(f"Invalid relative position: {position}")
+
+    # Extract the calculated offsets
+    x_offset, y_offset = offset
+    print(f"x_offset: {x_offset}, y_offset: {y_offset}")
+    height_a, width_a = tile_a.image.shape[:2]
+    height_b, width_b = tile_b.image.shape[:2]
+
+    # Calculate the bounding box of the combined image
+    canvas_width = (
+        max(width_a, width_a + x_offset) if x_offset > 0 else width_a - x_offset
+    )
+    canvas_height = (
+        max(height_a, height_a + y_offset) if y_offset > 0 else height_a - y_offset
+    )
+
+    # Create a blank canvas with the calculated dimensions
     canvas = np.zeros((canvas_height, canvas_width, 3), dtype=np.uint8)
 
-    # Place image_a at the center of the canvas
-    canvas[: image_a.shape[0], : image_a.shape[1]] = image_a
+    # Place tile_a on the canvas, adjusting for negative offsets
+    x_a, y_a = (max(-x_offset, 0), max(-y_offset, 0))
+    canvas[y_a : y_a + height_a, x_a : x_a + width_a] = tile_a.image
 
-    # Calculate the overlay area and handle edges
-    x1, y1 = max(0, x_offset), max(0, y_offset)
-    x2, y2 = min(canvas.shape[1], x_offset + image_b.shape[1]), min(
-        canvas.shape[0], y_offset + image_b.shape[0]
+    # Calculate the position to place tile_b on the canvas based on offsets
+    x_b, y_b = (x_a + x_offset, y_a + y_offset)
+
+    # Overlay tile_b on the canvas at the calculated position with specified opacity
+    blended = cv2.addWeighted(
+        canvas[y_b : y_b + height_b, x_b : x_b + width_b],
+        1 - opacity,
+        tile_b.image[:height_b, :width_b],
+        opacity,
+        0,
     )
-    canvas_section = canvas[y1:y2, x1:x2]
-
-    # Calculate the region of image_b to overlay
-    x1_b, y1_b = max(0, -x_offset), max(0, -y_offset)
-    x2_b, y2_b = x1_b + (x2 - x1), y1_b + (y2 - y1)
-    image_b_section = image_b[y1_b:y2_b, x1_b:x2_b]
-
-    # Blend the images in the region
-    blended_section = cv2.addWeighted(
-        canvas_section, 1 - opacity, image_b_section, opacity, 0
-    )
-    canvas[y1:y2, x1:x2] = blended_section
+    canvas[y_b : y_b + height_b, x_b : x_b + width_b] = blended
 
     return canvas
 
 
 if __name__ == "__main__":
-    # Load the images
-    name_a = "images/map/a/37_T_FJ_01500_00500.png"
-    name_b = "images/map/a/37_T_FJ_01500_01500.png"
+    # Load the images and parse coordinates
+    name_a = "/Users/maxpushka/dev/github.com/maxpushka/map-builder/src/stitching/images/map/a/37_T_FJ_01500_01500.png"
+    name_b = "/Users/maxpushka/dev/github.com/maxpushka/map-builder/src/stitching/images/map/a/37_T_FJ_01500_00500.png"
     image_a = cv2.imread(name_a)
     image_b = cv2.imread(name_b)
+    coord_a = MGRSCoordinates(name_a.split("/")[-1].split(".")[0])
+    coord_b = MGRSCoordinates(name_b.split("/")[-1].split(".")[0])
+    print(coord_a.position(coord_b))
 
-    do_crop = True
-    if do_crop:
-        image_a = crop_image(image_a)
-        image_b = crop_image(image_b)
+    # Create Tile instances
+    tile_a = Tile(
+        name=name_a,
+        image=image_a,
+        mgrs_coord=coord_a,
+        top_left=(1135, 386),
+        top_right=(2644, 277),
+        bottom_left=(1244, 1895),
+        bottom_right=(2753, 1786),
+    )
+    tile_b = Tile(
+        name=name_b,
+        image=image_b,
+        mgrs_coord=coord_b,
+        top_left=(1135, 386),
+        top_right=(2644, 277),
+        bottom_left=(1244, 1895),
+        bottom_right=(2753, 1786),
+    )
 
-    # Determine initial offsets based on the coordinates
-    coord_a = parse_coordinates(name_a.split("/")[-1].split(".")[0])
-    coord_b = parse_coordinates(name_b.split("/")[-1].split(".")[0])
-    if coord_a.easting < coord_b.easting and coord_a.northing == coord_b.northing:
-        x_offset, y_offset = 1510, -110
-    elif coord_a.easting > coord_b.easting and coord_a.northing == coord_b.northing:
-        x_offset, y_offset = 1510, -110
-        name_a, name_b = name_b, name_a
-        image_a, image_b = image_b, image_a
-    elif coord_a.easting == coord_b.easting and coord_a.northing > coord_b.northing:
-        x_offset, y_offset = 110, 1510
-    elif coord_a.easting == coord_b.easting and coord_a.northing < coord_b.northing:
-        x_offset, y_offset = 110, 1510
-        name_a, name_b = name_b, name_a
-        image_a, image_b = image_b, image_a
-    else:
-        raise ValueError("No intersection found between the images")
+    # Crop images and update coordinates
+    tile_a = crop_image(tile_a)
+    tile_b = crop_image(tile_b)
 
-    # Set opacity for the second image
-    opacity_toggle = True
-    opacity_default = 0.5
-    opacity = opacity_default
-    scale = 1.0
+    # Overlay images based on corner alignment
+    combined_image = stitch_images(tile_a, tile_b, opacity=0.5)
 
-    # Display window and handle key events
-    cv2.namedWindow("Image Overlay")
-    while True:
-        # Overlay images with current offsets and scaled images
-        combined_image = overlay_images(
-            image_a, image_b, x_offset, y_offset, opacity
-        )
-        combined_image = cv2.resize(
-            combined_image, None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR
-        )
-        cv2.imshow("Image Overlay", combined_image)
-
-        # Capture key press
-        key = cv2.waitKey(10) & 0xFF
-
-        if key == ord("w"):
-            y_offset -= 10
-        elif key == ord("s"):
-            y_offset += 10
-        elif key == ord("a"):
-            x_offset -= 10
-        elif key == ord("d"):
-            x_offset += 10
-        elif key == ord("e"):
-            print(f"Current offsets: X = {x_offset}, Y = {y_offset}")
-        elif key == ord("c"):
-            cv2.imwrite("result.png", combined_image)
-        elif key == ord("o"):
-            if opacity_toggle:
-                opacity = 1.0
-            else:
-                opacity = opacity_default
-            opacity_toggle = not opacity_toggle
-        elif key == ord("z"):
-            scale += 0.1  # Increase zoom
-        elif key == ord("x") and scale > 0.1:
-            scale -= 0.1  # Decrease zoom
-        elif key == ord("q") or key == 27:  # Escape key
-            break
-
+    # Display the result
+    cv2.imshow("Image Overlay", combined_image)
+    cv2.waitKey(0)
     cv2.destroyAllWindows()
