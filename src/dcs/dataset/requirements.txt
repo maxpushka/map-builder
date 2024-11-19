@@ -1,5 +1,5 @@
 pyautogui
 pygetwindow
+pydirectinput
 pyscreeze
 pillow
-pydirectinput

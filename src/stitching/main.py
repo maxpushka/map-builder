@@ -1,9 +1,7 @@
-from common import crop_image
 from pyspark import SparkContext
 from pyspark.sql import SparkSession
 from PIL import Image
 import cv2
-import numpy as np
 import re
 
 # Define the Spark context and session
@@ -24,9 +22,6 @@ def stitch_images(images):
 
     if status != cv2.Stitcher_OK:
         raise StitchingError(status)
-
-    # Overlaying
-    # TODO: Implement overlaying logic here
 
     return pano
 
@@ -59,7 +54,6 @@ def parse_image(record):
     # Crop image around the bounding box
     cropped_image_data = crop_image(image_data)
     return (zone, square, easting, northing), cropped_image_data
-
 
 
 # Stage 1: Merge 1km blocks into 10km blocks

@@ -1,3 +1,39 @@
+# import mgrs
+
+
+# class MGRSIterator:
+#     def __init__(self, start_mgrs, step_size=1000):
+#         self.mgrs_converter = mgrs.MGRS()
+#         self.step_size = step_size  # Step size in meters
+
+#         # Convert initial MGRS to UTM coordinates
+#         self.zone, self.hemisphere, self.easting, self.northing = (
+#             self.mgrs_converter.MGRSToUTM(start_mgrs)
+#         )
+
+#     def __iter__(self):
+#         return self
+
+#     def __next__(self):
+#         # Increment UTM easting by step_size (move eastward by step_size meters)
+#         self.easting += self.step_size
+
+#         # Convert updated UTM coordinates back to MGRS
+#         new_mgrs = self.mgrs_converter.UTMToMGRS(
+#             self.zone, self.hemisphere, self.easting, self.northing
+#         )
+
+#         return new_mgrs
+
+
+# if __name__ == "__main__":
+#     start_mgrs = "37TGJ3850068500"  # Replace with your starting MGRS coordinate
+#     iterator = MGRSIterator(start_mgrs, step_size=1000)  # Step size in meters
+
+#     for i, coord in zip(range(10), iterator):  # Limit to 10 steps for demonstration
+#         print(coord)
+
+
 class MGRSCoordinateIterator:
     def __init__(
         self,

@@ -1,36 +1,29 @@
-from dataclasses import dataclass
 import cv2
 import numpy as np
-from common import MGRSCoordinates, MRGSRelativePosition, Tile, crop_image
+
+from mgrs_utils import nearest
+from tile import GridLineIntersections, Tile, RelativePosition
 
 
-def stitch_images(tile_a: Tile, tile_b: Tile, opacity=1.0):
-    # Determine the relative position of tile_b with respect to tile_a
-    position = tile_a.mgrs_coord.position(tile_b.mgrs_coord)
+def stitch_images(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
+    # Find the nearest grid intersection between the two tiles
+    position, adjacent_grid_a, adjacent_grid_b = None, None, None
+    for mgrs_a, grid_a in tile_a.grid.items():
+        for relative in RelativePosition:
+            nearest_mgrs = nearest(mgrs_a, relative)
+            if nearest_mgrs in tile_b.grid:
+                position = relative
+                adjacent_grid_a = grid_a
+                adjacent_grid_b = tile_b.grid[nearest_mgrs]
+                break
+    if position is None or adjacent_grid_a is None or adjacent_grid_b is None:
+        raise ValueError("No common grid intersection found between the two tiles")
 
     # Calculate x and y offsets based on points of interest in `Tile`
-    if position == MRGSRelativePosition.ABOVE:
-        offset = tile_a.top_left - tile_b.bottom_left
-    elif position == MRGSRelativePosition.BELOW:
-        offset = tile_a.bottom_left - tile_b.top_left
-    elif position == MRGSRelativePosition.LEFT:
-        offset = tile_a.top_left - tile_b.top_right
-    elif position == MRGSRelativePosition.RIGHT:
-        offset = tile_a.top_right - tile_b.top_left
-    elif position == MRGSRelativePosition.ABOVE_LEFT:
-        offset = tile_a.top_left - tile_b.bottom_right
-    elif position == MRGSRelativePosition.ABOVE_RIGHT:
-        offset = tile_a.top_right - tile_b.bottom_left
-    elif position == MRGSRelativePosition.BELOW_LEFT:
-        offset = tile_a.bottom_left - tile_b.top_right
-    elif position == MRGSRelativePosition.BELOW_RIGHT:
-        offset = tile_a.bottom_right - tile_b.top_left
-    else:
-        raise ValueError(f"Invalid relative position: {position}")
+    offset = compute_offset(position, adjacent_grid_a, adjacent_grid_b)
 
     # Extract the calculated offsets
     x_offset, y_offset = offset
-    print(f"x_offset: {x_offset}, y_offset: {y_offset}")
     height_a, width_a = tile_a.image.shape[:2]
     height_b, width_b = tile_b.image.shape[:2]
 
@@ -62,47 +55,74 @@ def stitch_images(tile_a: Tile, tile_b: Tile, opacity=1.0):
     )
     canvas[y_b : y_b + height_b, x_b : x_b + width_b] = blended
 
-    return canvas
+    # Adjust tile_b's grid based on the computed offset
+    adjusted_grid_b = {}
+    for mgrs_b, grid_b in tile_b.grid.items():
+        adjusted_intersections = GridLineIntersections()
+        adjusted_intersections.top_left = grid_b.top_left + offset
+        adjusted_intersections.top_right = grid_b.top_right + offset
+        adjusted_intersections.bottom_left = grid_b.bottom_left + offset
+        adjusted_intersections.bottom_right = grid_b.bottom_right + offset
+        adjusted_grid_b[mgrs_b] = adjusted_intersections
+
+    # Merge tile_a's grid with the adjusted tile_b grid.
+    # Tile_a's grid does not need adjustment
+    # because tile_a is positioned as the reference
+    # or anchor tile on the canvas.
+    merged_grid = {**tile_a.grid, **adjusted_grid_b}
+
+    # Create and return a new Tile with the merged image and grid
+    return Tile.from_tile(canvas, merged_grid)
+
+
+def compute_offset(
+    position: RelativePosition,
+    grid_a: GridLineIntersections,
+    grid_b: GridLineIntersections,
+) -> np.ndarray:
+    if position == RelativePosition.ABOVE:
+        offset = grid_a.top_left - grid_b.bottom_left
+    elif position == RelativePosition.BELOW:
+        offset = grid_a.bottom_left - grid_b.top_left
+    elif position == RelativePosition.LEFT:
+        offset = grid_a.top_left - grid_b.top_right
+    elif position == RelativePosition.RIGHT:
+        offset = grid_a.top_right - grid_b.top_left
+    elif position == RelativePosition.ABOVE_LEFT:
+        offset = grid_a.top_left - grid_b.bottom_right
+    elif position == RelativePosition.ABOVE_RIGHT:
+        offset = grid_a.top_right - grid_b.bottom_left
+    elif position == RelativePosition.BELOW_LEFT:
+        offset = grid_a.bottom_left - grid_b.top_right
+    elif position == RelativePosition.BELOW_RIGHT:
+        offset = grid_a.bottom_right - grid_b.top_left
+    else:
+        raise ValueError(f"Invalid relative position: {position}")
+    return offset
 
 
 if __name__ == "__main__":
     # Load the images and parse coordinates
-    name_a = "/Users/maxpushka/dev/github.com/maxpushka/map-builder/src/stitching/images/map/a/37_T_FJ_01500_01500.png"
-    name_b = "/Users/maxpushka/dev/github.com/maxpushka/map-builder/src/stitching/images/map/a/37_T_FJ_01500_00500.png"
-    image_a = cv2.imread(name_a)
-    image_b = cv2.imread(name_b)
-    coord_a = MGRSCoordinates(name_a.split("/")[-1].split(".")[0])
-    coord_b = MGRSCoordinates(name_b.split("/")[-1].split(".")[0])
-    print(coord_a.position(coord_b))
+    root = "."
+    name_a = f"{root}/37_T_FJ_00500_00500.png"
+    name_b = f"{root}/37_T_FJ_00500_01500.png"
+    name_c = f"{root}/37_T_FJ_01500_00500.png"
+    name_d = f"{root}/37_T_FJ_01500_01500.png"
 
     # Create Tile instances
-    tile_a = Tile(
-        name=name_a,
-        image=image_a,
-        mgrs_coord=coord_a,
-        top_left=(1135, 386),
-        top_right=(2644, 277),
-        bottom_left=(1244, 1895),
-        bottom_right=(2753, 1786),
-    )
-    tile_b = Tile(
-        name=name_b,
-        image=image_b,
-        mgrs_coord=coord_b,
-        top_left=(1135, 386),
-        top_right=(2644, 277),
-        bottom_left=(1244, 1895),
-        bottom_right=(2753, 1786),
-    )
-
-    # Crop images and update coordinates
-    tile_a = crop_image(tile_a)
-    tile_b = crop_image(tile_b)
+    to_mgrs = lambda name: name.split("/")[-1].split(".")[0].replace("_", "")
+    tile_a = Tile(cv2.imread(name_a), to_mgrs(name_a))
+    tile_b = Tile(cv2.imread(name_b), to_mgrs(name_b))
+    tile_c = Tile(cv2.imread(name_c), to_mgrs(name_c))
+    tile_d = Tile(cv2.imread(name_d), to_mgrs(name_d))
 
     # Overlay images based on corner alignment
-    combined_image = stitch_images(tile_a, tile_b, opacity=0.5)
+    opacity = 1
+    tile_ab = stitch_images(tile_a, tile_b, opacity)
+    tile_cd = stitch_images(tile_c, tile_d, opacity)
+    combined_image = stitch_images(tile_ab, tile_cd, opacity)
 
     # Display the result
-    cv2.imshow("Image Overlay", combined_image)
+    cv2.imshow("Image Overlay", combined_image.image)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
