@@ -64,11 +64,25 @@ class Tile:
         )
 
         # Get the bounding rectangle for the crop area
-        x, y, w, h = cv2.boundingRect(CROP_POINTS.astype(np.int32))
+        x, y, w, h = cv2.boundingRect(CROP_POINTS)
         delta = np.array([x, y])
 
         # Crop the region of interest (ROI) from the image
         cropped_image = self.image[y : y + h, x : x + w]
+
+        # Create an alpha channel mask based on the crop points
+        mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.fillPoly(mask, [CROP_POINTS - delta], 255)  # Adjust points for mask region
+
+        # Ensure the cropped image has an alpha channel
+        if cropped_image.shape[2] == 3:  # If RGB, add alpha channel
+            cropped_image = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2BGRA)
+
+        # Resize the mask to match the cropped image's dimensions if necessary
+        mask = cv2.resize(mask, (cropped_image.shape[1], cropped_image.shape[0]))
+
+        # Apply the mask to the alpha channel (outside area becomes transparent)
+        cropped_image[:, :, 3] = mask
 
         # Get the grid lines for the tile
         mgrs, grid = next(iter(self.grid.items()))
@@ -84,15 +98,13 @@ class Tile:
 
         # Add circles to the corners of the cropped image for visualization
         if visualize:
-            cv2.circle(cropped_image, grid.top_left, 10, (0, 0, 255), -1)  # Red in BGR
+            cv2.circle(cropped_image, grid.top_left, 10, (0, 0, 255, 255), -1)  # Red
+            cv2.circle(cropped_image, grid.top_right, 10, (0, 255, 0, 255), -1)  # Green
             cv2.circle(
-                cropped_image, grid.top_right, 10, (0, 255, 0), -1
-            )  # Green in BGR
+                cropped_image, grid.bottom_left, 10, (255, 0, 0, 255), -1
+            )  # Blue
             cv2.circle(
-                cropped_image, grid.bottom_left, 10, (255, 0, 0), -1
-            )  # Blue in BGR
-            cv2.circle(
-                cropped_image, grid.bottom_right, 10, (0, 255, 255), -1
-            )  # Yellow in BGR
-            cv2.imshow("Cropped Image", cropped_image)
+                cropped_image, grid.bottom_right, 10, (0, 255, 255, 255), -1
+            )  # Yellow
+            cv2.imshow("Cropped Image with Transparency", cropped_image)
             cv2.waitKey(0)

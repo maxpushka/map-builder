@@ -35,8 +35,9 @@ def stitch_images(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
         max(height_a, height_a + y_offset) if y_offset > 0 else height_a - y_offset
     )
 
-    # Create a blank canvas with the calculated dimensions
-    canvas = np.zeros((canvas_height, canvas_width, 3), dtype=np.uint8)
+    # Create a blank canvas with the calculated dimensions and 4 channels (RGBA),
+    # and initialize it as fully transparent
+    canvas = np.zeros((canvas_height, canvas_width, 4), dtype=np.uint8)
 
     # Place tile_a on the canvas, adjusting for negative offsets
     x_a, y_a = (max(-x_offset, 0), max(-y_offset, 0))
@@ -46,14 +47,19 @@ def stitch_images(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
     x_b, y_b = (x_a + x_offset, y_a + y_offset)
 
     # Overlay tile_b on the canvas at the calculated position with specified opacity
+    tile_b_region = canvas[y_b : y_b + height_b, x_b : x_b + width_b]
     blended = cv2.addWeighted(
-        canvas[y_b : y_b + height_b, x_b : x_b + width_b],
-        1 - opacity,
-        tile_b.image[:height_b, :width_b],
-        opacity,
-        0,
+        tile_b_region[:, :, :3], 1 - opacity, tile_b.image[:, :, :3], opacity, 0
     )
-    canvas[y_b : y_b + height_b, x_b : x_b + width_b] = blended
+
+    # Combine alpha channel of tile_b with existing canvas alpha
+    alpha_b = tile_b.image[:, :, 3] * opacity
+    alpha_existing = tile_b_region[:, :, 3] * (1 - opacity)
+    combined_alpha = np.clip(alpha_b + alpha_existing, 0, 255)
+
+    # Assign RGB and alpha values back to canvas
+    tile_b_region[:, :, :3] = blended
+    tile_b_region[:, :, 3] = combined_alpha
 
     # Adjust tile_b's grid based on the computed offset
     adjusted_grid_b = {}
@@ -103,6 +109,8 @@ def compute_offset(
 
 if __name__ == "__main__":
     # Load the images and parse coordinates
+    # NOTE: download the images manually!
+    # They're not provided in the repo.
     root = "."
     name_a = f"{root}/37_T_FJ_00500_00500.png"
     name_b = f"{root}/37_T_FJ_00500_01500.png"
@@ -124,5 +132,7 @@ if __name__ == "__main__":
 
     # Display the result
     cv2.imshow("Image Overlay", combined_image.image)
-    cv2.waitKey(0)
+    key = cv2.waitKey(0) & 0xFF
     cv2.destroyAllWindows()
+    if key == ord("r"):
+        cv2.imwrite("combined_image.png", combined_image.image)
