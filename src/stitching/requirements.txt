@@ -1,0 +1,6 @@
+pyspark
+pillow
+opencv-python
+numpy
+mgrs
+packaging # for mgrs
