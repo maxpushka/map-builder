@@ -2,18 +2,7 @@ from enum import Enum
 import cv2
 import numpy as np
 
-
-class RelativePosition(Enum):
-    NO_RELATION = 0
-    ABOVE = 1
-    BELOW = 2
-    LEFT = 3
-    RIGHT = 4
-    ABOVE_LEFT = 5
-    ABOVE_RIGHT = 6
-    BELOW_LEFT = 7
-    BELOW_RIGHT = 8
-    CENTER = 9
+from coordinates import MGRSCoordinate
 
 
 class GridLineIntersections:
@@ -31,16 +20,16 @@ class GridLineIntersections:
 
 class Tile:
     image: np.ndarray
-    grid: dict[str, GridLineIntersections]
+    grid: dict[MGRSCoordinate, GridLineIntersections]
 
-    def __init__(self, image: np.ndarray, coord: str, do_crop=True):
+    def __init__(self, image: np.ndarray, coord: MGRSCoordinate, do_crop=True):
         self.image = image
         self.grid = {coord: GridLineIntersections()}
         if do_crop:
             self._crop_image()
 
     @classmethod
-    def from_tile(cls, image: np.ndarray, grid: dict[str, GridLineIntersections]):
+    def from_tile(cls, image: np.ndarray, grid: dict[MGRSCoordinate, GridLineIntersections]):
         tile = cls(image, "", do_crop=False)
         tile.grid = grid
         return tile

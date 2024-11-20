@@ -1,8 +1,9 @@
+from typing import Callable
 import cv2
 import numpy as np
 
-from mgrs_utils import nearest
-from tile import GridLineIntersections, Tile, RelativePosition
+from coordinates import MGRSCoordinate, RelativePosition
+from tile import GridLineIntersections, Tile
 
 
 def stitch_images(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
@@ -10,7 +11,7 @@ def stitch_images(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
     position, adjacent_grid_a, adjacent_grid_b = None, None, None
     for mgrs_a, grid_a in tile_a.grid.items():
         for relative in RelativePosition:
-            nearest_mgrs = nearest(mgrs_a, relative)
+            nearest_mgrs = mgrs_a.nearest(relative)
             if nearest_mgrs in tile_b.grid:
                 position = relative
                 adjacent_grid_a = grid_a
@@ -111,14 +112,16 @@ if __name__ == "__main__":
     # Load the images and parse coordinates
     # NOTE: download the images manually!
     # They're not provided in the repo.
-    root = "."
+    root = "/Users/maxpushka/dev/github.com/maxpushka/map-builder/src/stitching/images/map/a"
     name_a = f"{root}/37_T_FJ_00500_00500.png"
     name_b = f"{root}/37_T_FJ_00500_01500.png"
     name_c = f"{root}/37_T_FJ_01500_00500.png"
     name_d = f"{root}/37_T_FJ_01500_01500.png"
 
     # Create Tile instances
-    to_mgrs = lambda name: name.split("/")[-1].split(".")[0].replace("_", "")
+    to_mgrs: Callable[[str], MGRSCoordinate] = (
+        lambda name: MGRSCoordinate.from_filename(name.split("/")[-1].split(".")[0])
+    )
     tile_a = Tile(cv2.imread(name_a), to_mgrs(name_a))
     tile_b = Tile(cv2.imread(name_b), to_mgrs(name_b))
     tile_c = Tile(cv2.imread(name_c), to_mgrs(name_c))
@@ -134,5 +137,5 @@ if __name__ == "__main__":
     cv2.imshow("Image Overlay", combined_image.image)
     key = cv2.waitKey(0) & 0xFF
     cv2.destroyAllWindows()
-    if key == ord("r"):
+    if key == ord("s"):
         cv2.imwrite("combined_image.png", combined_image.image)
