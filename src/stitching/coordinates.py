@@ -100,6 +100,8 @@ class MGRSCoordinate:
         )
 
     def nearest(self, dir: RelativePosition, step_size=1000) -> "MGRSCoordinate":
+        if dir == RelativePosition.NO_RELATION:
+            raise ValueError("Cannot find nearest coordinate for unrelated positions")
         m = mgrs.MGRS()
 
         # Convert MGRS coordinate to UTM coordinates
@@ -119,7 +121,7 @@ class MGRSCoordinate:
         }
 
         # Get the movement deltas for the specified direction
-        delta_easting, delta_northing = movements.get(dir, (0, 0))
+        delta_easting, delta_northing = movements.get(dir)
 
         # Apply the deltas to get the new UTM coordinates
         new_easting = easting + delta_easting

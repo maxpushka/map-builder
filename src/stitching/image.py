@@ -11,6 +11,8 @@ def stitch_images(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
     position, adjacent_grid_a, adjacent_grid_b = None, None, None
     for mgrs_a, grid_a in tile_a.grid.items():
         for direction in RelativePosition:
+            if direction == RelativePosition.NO_RELATION:
+                continue
             nearest_mgrs = mgrs_a.nearest(direction)
             if nearest_mgrs in tile_b.grid:
                 position = direction
@@ -103,6 +105,8 @@ def compute_offset(
         offset = grid_a.bottom_left - grid_b.top_right
     elif position == RelativePosition.BELOW_RIGHT:
         offset = grid_a.bottom_right - grid_b.top_left
+    elif position == RelativePosition.CENTER:
+        offset = 0
     else:
         raise ValueError(f"Invalid relative position: {position}")
     return offset
