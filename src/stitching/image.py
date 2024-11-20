@@ -10,10 +10,10 @@ def stitch_images(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
     # Find the nearest grid intersection between the two tiles
     position, adjacent_grid_a, adjacent_grid_b = None, None, None
     for mgrs_a, grid_a in tile_a.grid.items():
-        for relative in RelativePosition:
-            nearest_mgrs = mgrs_a.nearest(relative)
+        for direction in RelativePosition:
+            nearest_mgrs = mgrs_a.nearest(direction)
             if nearest_mgrs in tile_b.grid:
-                position = relative
+                position = direction
                 adjacent_grid_a = grid_a
                 adjacent_grid_b = tile_b.grid[nearest_mgrs]
                 break

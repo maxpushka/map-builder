@@ -134,5 +134,5 @@ class MGRSCoordinate:
 if __name__ == "__main__":
     a = MGRSCoordinate("37T", "FJ", 15000, 5000)
     b = MGRSCoordinate("37T", "FJ", 15000, 5000)
-    d = {a: 12}
-    print(b in d)
+    grid = {a: 12}
+    print(b in grid)

@@ -1,4 +1,3 @@
-from enum import Enum
 import cv2
 import numpy as np
 
@@ -61,7 +60,7 @@ class Tile:
 
         # Create an alpha channel mask based on the crop points
         mask = np.zeros((h, w), dtype=np.uint8)
-        cv2.fillPoly(mask, [CROP_POINTS - delta], 255)  # Adjust points for mask region
+        cv2.fillPoly(mask, [CROP_POINTS - delta], 255)
 
         # Ensure the cropped image has an alpha channel
         if cropped_image.shape[2] == 3:  # If RGB, add alpha channel
