@@ -18,10 +18,10 @@ class GridLineIntersections:
 
 
 class Tile:
-    image: np.ndarray
+    image: cv2.typing.MatLike
     grid: dict[MGRSCoordinate, GridLineIntersections]
 
-    def __init__(self, image: np.ndarray, coord: MGRSCoordinate, do_crop=True):
+    def __init__(self, image: cv2.typing.MatLike, coord: MGRSCoordinate, do_crop=True):
         self.image = image
         self.grid = {coord: GridLineIntersections()}
         if do_crop:
@@ -29,7 +29,9 @@ class Tile:
 
     @classmethod
     def from_tile(
-        cls, image: np.ndarray, grid: dict[MGRSCoordinate, GridLineIntersections]
+        cls,
+        image: cv2.typing.MatLike,
+        grid: dict[MGRSCoordinate, GridLineIntersections],
     ):
         tile = cls(image, "", do_crop=False)
         tile.grid = grid
