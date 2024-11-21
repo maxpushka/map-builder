@@ -18,30 +18,47 @@ class GridLineIntersections:
 
 
 class Tile:
-    image: cv2.typing.MatLike
+    _image_path: str
+    _image: cv2.typing.MatLike | None
+    _do_crop: bool
     grid: dict[MGRSCoordinate, GridLineIntersections]
 
-    def __init__(self, image: cv2.typing.MatLike, coord: MGRSCoordinate, do_crop=True):
-        self.image = image
+    def __init__(self, image_path: str, coord: MGRSCoordinate, do_crop=True):
+        self._image_path = image_path
+        self._image = None
+        self._do_crop = do_crop
         self.grid = {coord: GridLineIntersections()}
-        if do_crop:
-            self._crop_image()
 
     @classmethod
     def from_tile(
         cls,
-        image: cv2.typing.MatLike,
+        image_path: str,
         grid: dict[MGRSCoordinate, GridLineIntersections],
     ):
-        tile = cls(image, "", do_crop=False)
+        tile = cls(image_path, MGRSCoordinate("", "", 0, 0), do_crop=False)
         tile.grid = grid
         return tile
 
-    def visualize(self):
-        if self.image is None:
-            raise ValueError("Tile or image is None")
+    def image(self) -> cv2.typing.MatLike:
+        if self._image is not None:
+            return self._image
 
-        copy_image = self.image.copy()
+        if self._image_path.endswith(".png"):
+            self._image = cv2.imread(self._image_path, cv2.IMREAD_UNCHANGED)
+            if self._image is None:
+                raise ValueError(f"Failed to read image from {self._image_path}")
+        elif self._image_path.endswith(".npy"):
+            self._image = np.load(self._image_path)
+        else:
+            raise ValueError(f"Unsupported image format: {self._image_path}")
+
+        if self._do_crop:
+            self._crop_image()
+            self._do_crop = False  # Only crop once
+        return self._image
+
+    def visualize(self):
+        copy_image = self.image().copy()
         for grid in self.grid.values():
             cv2.circle(copy_image, grid.top_left, 10, (0, 0, 255, 255), -1)
             cv2.circle(copy_image, grid.top_right, 10, (0, 0, 255, 255), -1)
@@ -51,7 +68,7 @@ class Tile:
 
     # Function to crop image around a given bounding box
     def _crop_image(self, visualize=False):
-        if self.image is None:
+        if self._image is None:
             raise ValueError("Tile or image is None")
         if len(self.grid) > 1:
             raise ValueError("Crop is applied for a one-image tile only")
@@ -72,7 +89,7 @@ class Tile:
         delta = np.array([x, y])
 
         # Crop the region of interest (ROI) from the image
-        cropped_image = self.image[y : y + h, x : x + w]
+        cropped_image = self.image()[y : y + h, x : x + w]
 
         # Create an alpha channel mask based on the crop points
         mask = np.zeros((h, w), dtype=np.uint8)
@@ -97,7 +114,7 @@ class Tile:
         grid.bottom_left -= delta
         grid.bottom_right -= delta
 
-        self.image = cropped_image
+        self._image = cropped_image
         self.grid = {mgrs: grid}
 
         # Add circles to the corners of the cropped image for visualization

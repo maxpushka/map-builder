@@ -1,3 +1,4 @@
+import os
 from typing import Callable
 import cv2
 import numpy as np
@@ -6,11 +7,11 @@ from coordinates import MGRSCoordinate, RelativePosition
 from tile import GridLineIntersections, Tile
 
 
-def stitch_tiles(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
+def stitch_tiles(tile_a: Tile, tile_b: Tile, cache_dir: str, opacity=1.0) -> Tile:
     # Ensure the larger tile is always first
     if (
-        tile_a.image.shape[0] * tile_a.image.shape[1]
-        < tile_b.image.shape[0] * tile_b.image.shape[1]
+        tile_a.image().shape[0] * tile_a.image().shape[1]
+        < tile_b.image().shape[0] * tile_b.image().shape[1]
     ):
         tile_a, tile_b = tile_b, tile_a
 
@@ -34,8 +35,8 @@ def stitch_tiles(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
 
     # Extract the calculated offsets
     x_offset, y_offset = offset
-    height_a, width_a = tile_a.image.shape[:2]
-    height_b, width_b = tile_b.image.shape[:2]
+    height_a, width_a = tile_a.image().shape[:2]
+    height_b, width_b = tile_b.image().shape[:2]
 
     # Calculate the bounding box of the combined image
     canvas_width = (
@@ -51,7 +52,7 @@ def stitch_tiles(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
 
     # Place tile_a on the canvas, adjusting for negative offsets
     x_a, y_a = (max(-x_offset, 0), max(-y_offset, 0))
-    canvas[y_a : y_a + height_a, x_a : x_a + width_a] = tile_a.image
+    canvas[y_a : y_a + height_a, x_a : x_a + width_a] = tile_a.image()
 
     # Calculate the position to place tile_b on the canvas based on offsets
     x_b, y_b = (x_a + x_offset, y_a + y_offset)
@@ -59,11 +60,11 @@ def stitch_tiles(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
     # Overlay tile_b on the canvas at the calculated position with specified opacity
     tile_b_region = canvas[y_b : y_b + height_b, x_b : x_b + width_b]
     blended = cv2.addWeighted(
-        tile_b_region[:, :, :3], 1 - opacity, tile_b.image[:, :, :3], opacity, 0
+        tile_b_region[:, :, :3], 1 - opacity, tile_b.image()[:, :, :3], opacity, 0
     )
 
     # Combine alpha channel of tile_b with existing canvas alpha
-    alpha_b = tile_b.image[:, :, 3] * opacity
+    alpha_b = tile_b.image()[:, :, 3] * opacity
     alpha_existing = tile_b_region[:, :, 3] * (1 - opacity)
     combined_alpha = np.clip(alpha_b + alpha_existing, 0, 255)
 
@@ -110,8 +111,12 @@ def stitch_tiles(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
     # Merge the adjusted grids
     merged_grid = {**adjusted_grid_a, **adjusted_grid_b}
 
+    # Write the merged image to the disk
+    canvas_path = f"{cache_dir}/combined_image.npy"
+    np.save(canvas_path, canvas)
+
     # Create and return a new Tile with the merged image and grid
-    return Tile.from_tile(canvas, merged_grid)
+    return Tile.from_tile(canvas_path, merged_grid)
 
 
 def _compute_offset(
@@ -154,42 +159,53 @@ if __name__ == "__main__":
     # Load the images and parse coordinates
     # NOTE: download the images manually!
     # They're not provided in the repo.
-    root = "/Users/maxpushka/dev/github.com/maxpushka/map-builder/src/stitching/images/map/a"
-    name_a = f"{root}/37_T_FJ_00500_00500.png"
-    name_b = f"{root}/37_T_FJ_00500_01500.png"
-    name_c = f"{root}/37_T_FJ_01500_00500.png"
-    name_d = f"{root}/37_T_FJ_01500_01500.png"
+    CACHE_DIR = "./cache"
+    os.makedirs(CACHE_DIR, exist_ok=True)
+
+    DATA_DIR = "./images"
+    name_a = f"{DATA_DIR}/37TFJ0050000500.png"
+    name_b = f"{DATA_DIR}/37TFJ0050001500.png"
+    name_c = f"{DATA_DIR}/37TFJ0150000500.png"
+    name_d = f"{DATA_DIR}/37TFJ0150001500.png"
 
     # Create Tile instances
     to_mgrs: Callable[[str], MGRSCoordinate] = (
         lambda name: MGRSCoordinate.from_filename(name.split("/")[-1].split(".")[0])
     )
-    tile_a = Tile(cv2.imread(name_a), to_mgrs(name_a))
-    tile_b = Tile(cv2.imread(name_b), to_mgrs(name_b))
-    tile_c = Tile(cv2.imread(name_c), to_mgrs(name_c))
-    tile_d = Tile(cv2.imread(name_d), to_mgrs(name_d))
+    tile_a = Tile(name_a, to_mgrs(name_a))
+    tile_b = Tile(name_b, to_mgrs(name_b))
+    tile_c = Tile(name_c, to_mgrs(name_c))
+    tile_d = Tile(name_d, to_mgrs(name_d))
 
     opacity = 1
 
-    def display_result(tile: Tile):
-        window_name = "Image Overlay"
-        cv2.imshow(window_name, tile.image)
+    def display_result(tile: Tile, filename: str, window_name: str = "Image Overlay"):
+        cv2.imshow(window_name, tile.image())
         key = cv2.waitKey(0) & 0xFF
         cv2.destroyWindow(window_name)
         if key == ord("s"):
-            cv2.imwrite("combined_image.png", tile.image)
+            cv2.imwrite(filename, tile.image())
 
     # Overlay images based on corner alignment
+
     # Case 1: Merge equally sized tiles
-    # tile_ab = stitch_images(tile_a, tile_b, opacity)
-    # tile_cd = stitch_images(tile_c, tile_d, opacity)
-    # combined = stitch_images(tile_ab, tile_cd, opacity)
+    tile_ab = stitch_tiles(tile_a, tile_b, CACHE_DIR, opacity)
+    tile_cd = stitch_tiles(tile_c, tile_d, CACHE_DIR, opacity)
+    equally_sized_tiles = stitch_tiles(tile_ab, tile_cd, CACHE_DIR, opacity)
+    display_result(
+        equally_sized_tiles, "equally_sized_image.png", "Equally Sized Image Overlay"
+    )
 
     # Case 2: Merge tiles with different sizes
-    tile_ab = stitch_tiles(tile_a, tile_b, opacity)
+    tile_ab = stitch_tiles(tile_a, tile_b, CACHE_DIR, opacity)
     tile_abc = stitch_tiles(
-        tile_c, tile_ab, opacity
+        tile_c, tile_ab, CACHE_DIR, opacity
     )  # here tile C is smaller than tile AB
-    combined = stitch_tiles(tile_abc, tile_d, opacity)
+    different_sized_tiles = stitch_tiles(tile_abc, tile_d, CACHE_DIR, opacity)
+    display_result(
+        different_sized_tiles,
+        "different_sized_image.png",
+        "Different Sized Image Overlay",
+    )
 
     # Case 3: Merge tiles of irregular shapes
