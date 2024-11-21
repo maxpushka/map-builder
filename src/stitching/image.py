@@ -6,7 +6,14 @@ from coordinates import MGRSCoordinate, RelativePosition
 from tile import GridLineIntersections, Tile
 
 
-def stitch_images(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
+def stitch_tiles(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
+    # Ensure the larger tile is always first
+    if (
+        tile_a.image.shape[0] * tile_a.image.shape[1]
+        < tile_b.image.shape[0] * tile_b.image.shape[1]
+    ):
+        tile_a, tile_b = tile_b, tile_a
+
     # Find the nearest grid intersection between the two tiles
     position, adjacent_grid_a, adjacent_grid_b = None, None, None
     for mgrs_a, grid_a in tile_a.grid.items():
@@ -23,7 +30,7 @@ def stitch_images(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
         raise ValueError("No common grid intersection found between the two tiles")
 
     # Calculate x and y offsets based on points of interest in `Tile`
-    offset = compute_offset(position, adjacent_grid_a, adjacent_grid_b)
+    offset = _compute_offset(position, adjacent_grid_a, adjacent_grid_b)
 
     # Extract the calculated offsets
     x_offset, y_offset = offset
@@ -64,27 +71,50 @@ def stitch_images(tile_a: Tile, tile_b: Tile, opacity=1.0) -> Tile:
     tile_b_region[:, :, :3] = blended
     tile_b_region[:, :, 3] = combined_alpha
 
-    # Adjust tile_b's grid based on the computed offset
+    # Adjust tile_a's grid based on its placement offsets on the canvas
+    adjusted_grid_a = {}
+    for mgrs_a, grid_a in tile_a.grid.items():
+        adjusted_intersections = GridLineIntersections()
+        adjusted_intersections.top_left = _clamp_to_canvas(
+            grid_a.top_left + np.array([x_a, y_a]), canvas.shape
+        )
+        adjusted_intersections.top_right = _clamp_to_canvas(
+            grid_a.top_right + np.array([x_a, y_a]), canvas.shape
+        )
+        adjusted_intersections.bottom_left = _clamp_to_canvas(
+            grid_a.bottom_left + np.array([x_a, y_a]), canvas.shape
+        )
+        adjusted_intersections.bottom_right = _clamp_to_canvas(
+            grid_a.bottom_right + np.array([x_a, y_a]), canvas.shape
+        )
+        adjusted_grid_a[mgrs_a] = adjusted_intersections
+
+    # Adjust tile_b's grid based on its placement offsets on the canvas
     adjusted_grid_b = {}
     for mgrs_b, grid_b in tile_b.grid.items():
         adjusted_intersections = GridLineIntersections()
-        adjusted_intersections.top_left = grid_b.top_left + offset
-        adjusted_intersections.top_right = grid_b.top_right + offset
-        adjusted_intersections.bottom_left = grid_b.bottom_left + offset
-        adjusted_intersections.bottom_right = grid_b.bottom_right + offset
+        adjusted_intersections.top_left = _clamp_to_canvas(
+            grid_b.top_left + np.array([x_b, y_b]), canvas.shape
+        )
+        adjusted_intersections.top_right = _clamp_to_canvas(
+            grid_b.top_right + np.array([x_b, y_b]), canvas.shape
+        )
+        adjusted_intersections.bottom_left = _clamp_to_canvas(
+            grid_b.bottom_left + np.array([x_b, y_b]), canvas.shape
+        )
+        adjusted_intersections.bottom_right = _clamp_to_canvas(
+            grid_b.bottom_right + np.array([x_b, y_b]), canvas.shape
+        )
         adjusted_grid_b[mgrs_b] = adjusted_intersections
 
-    # Merge tile_a's grid with the adjusted tile_b grid.
-    # Tile_a's grid does not need adjustment
-    # because tile_a is positioned as the reference
-    # or anchor tile on the canvas.
-    merged_grid = {**tile_a.grid, **adjusted_grid_b}
+    # Merge the adjusted grids
+    merged_grid = {**adjusted_grid_a, **adjusted_grid_b}
 
     # Create and return a new Tile with the merged image and grid
     return Tile.from_tile(canvas, merged_grid)
 
 
-def compute_offset(
+def _compute_offset(
     position: RelativePosition,
     grid_a: GridLineIntersections,
     grid_b: GridLineIntersections,
@@ -112,6 +142,14 @@ def compute_offset(
     return offset
 
 
+def _clamp_to_canvas(point, canvas_shape):
+    """Clamp a point to the canvas dimensions."""
+    y_max, x_max = canvas_shape[:2]
+    return np.array(
+        [max(0, min(point[0], x_max - 1)), max(0, min(point[1], y_max - 1))]
+    )
+
+
 if __name__ == "__main__":
     # Load the images and parse coordinates
     # NOTE: download the images manually!
@@ -131,15 +169,27 @@ if __name__ == "__main__":
     tile_c = Tile(cv2.imread(name_c), to_mgrs(name_c))
     tile_d = Tile(cv2.imread(name_d), to_mgrs(name_d))
 
-    # Overlay images based on corner alignment
     opacity = 1
-    tile_ab = stitch_images(tile_a, tile_b, opacity)
-    tile_cd = stitch_images(tile_c, tile_d, opacity)
-    combined_image = stitch_images(tile_ab, tile_cd, opacity)
 
-    # Display the result
-    cv2.imshow("Image Overlay", combined_image.image)
-    key = cv2.waitKey(0) & 0xFF
-    cv2.destroyAllWindows()
-    if key == ord("s"):
-        cv2.imwrite("combined_image.png", combined_image.image)
+    def display_result(tile: Tile):
+        window_name = "Image Overlay"
+        cv2.imshow(window_name, tile.image)
+        key = cv2.waitKey(0) & 0xFF
+        cv2.destroyWindow(window_name)
+        if key == ord("s"):
+            cv2.imwrite("combined_image.png", tile.image)
+
+    # Overlay images based on corner alignment
+    # Case 1: Merge equally sized tiles
+    # tile_ab = stitch_images(tile_a, tile_b, opacity)
+    # tile_cd = stitch_images(tile_c, tile_d, opacity)
+    # combined = stitch_images(tile_ab, tile_cd, opacity)
+
+    # Case 2: Merge tiles with different sizes
+    tile_ab = stitch_tiles(tile_a, tile_b, opacity)
+    tile_abc = stitch_tiles(
+        tile_c, tile_ab, opacity
+    )  # here tile C is smaller than tile AB
+    combined = stitch_tiles(tile_abc, tile_d, opacity)
+
+    # Case 3: Merge tiles of irregular shapes

@@ -28,10 +28,24 @@ class Tile:
             self._crop_image()
 
     @classmethod
-    def from_tile(cls, image: np.ndarray, grid: dict[MGRSCoordinate, GridLineIntersections]):
+    def from_tile(
+        cls, image: np.ndarray, grid: dict[MGRSCoordinate, GridLineIntersections]
+    ):
         tile = cls(image, "", do_crop=False)
         tile.grid = grid
         return tile
+
+    def visualize(self):
+        if self.image is None:
+            raise ValueError("Tile or image is None")
+
+        copy_image = self.image.copy()
+        for grid in self.grid.values():
+            cv2.circle(copy_image, grid.top_left, 10, (0, 0, 255, 255), -1)
+            cv2.circle(copy_image, grid.top_right, 10, (0, 0, 255, 255), -1)
+            cv2.circle(copy_image, grid.bottom_left, 10, (0, 0, 255, 255), -1)
+            cv2.circle(copy_image, grid.bottom_right, 10, (0, 0, 255, 255), -1)
+        return copy_image
 
     # Function to crop image around a given bounding box
     def _crop_image(self, visualize=False):
@@ -86,13 +100,6 @@ class Tile:
 
         # Add circles to the corners of the cropped image for visualization
         if visualize:
-            cv2.circle(cropped_image, grid.top_left, 10, (0, 0, 255, 255), -1)  # Red
-            cv2.circle(cropped_image, grid.top_right, 10, (0, 255, 0, 255), -1)  # Green
-            cv2.circle(
-                cropped_image, grid.bottom_left, 10, (255, 0, 0, 255), -1
-            )  # Blue
-            cv2.circle(
-                cropped_image, grid.bottom_right, 10, (0, 255, 255, 255), -1
-            )  # Yellow
+            self.visualize()
             cv2.imshow("Cropped Image with Transparency", cropped_image)
             cv2.waitKey(0)

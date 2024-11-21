@@ -7,7 +7,7 @@ from pyspark.sql import SparkSession
 
 from coordinates import MGRSCoordinate, RelativePosition
 from tile import Tile
-from image import stitch_images as stitch
+from image import stitch_tiles as stitch
 
 # Define the Spark context and session
 spark = (
