@@ -2,7 +2,7 @@ import os
 import hashlib
 import random
 import string
-from typing import Callable
+from typing import Callable, Tuple
 import cv2
 import numpy as np
 
@@ -19,6 +19,28 @@ def stitch_tiles(tile_a: Tile, tile_b: Tile, cache_dir: str, opacity=1.0) -> Til
         tile_a, tile_b = tile_b, tile_a
 
     # Find the nearest grid intersection between the two tiles
+    position, adjacent_grid_a, adjacent_grid_b = _find_intersection(tile_a, tile_b)
+
+    # Calculate x and y offsets based on points of interest in `Tile`
+    offset = _compute_offset(position, adjacent_grid_a, adjacent_grid_b)
+
+    # Stitch the two tiles together
+    canvas, a_position, b_position = _stitch_tiles(tile_a, tile_b, offset, opacity)
+
+    # Merge the grids of the two tiles
+    merged_grid = _merge_grids(tile_a, tile_b, canvas, a_position, b_position)
+
+    # Write the merged image to the disk to avoid keeping it in memory
+    canvas_path = f"{cache_dir}/{_generate_random_hash()}.npy"
+    np.save(canvas_path, canvas)
+
+    # Create and return a new Tile with the merged image and grid
+    return Tile.from_tile(canvas_path, merged_grid)
+
+
+def _find_intersection(
+    tile_a: Tile, tile_b: Tile
+) -> Tuple[RelativePosition, GridLineIntersections, GridLineIntersections]:
     position, adjacent_grid_a, adjacent_grid_b = None, None, None
     for mgrs_a, grid_a in tile_a.grid.items():
         for direction in RelativePosition:
@@ -32,10 +54,40 @@ def stitch_tiles(tile_a: Tile, tile_b: Tile, cache_dir: str, opacity=1.0) -> Til
                 break
     if position is None or adjacent_grid_a is None or adjacent_grid_b is None:
         raise ValueError("No common grid intersection found between the two tiles")
+    return (position, adjacent_grid_a, adjacent_grid_b)
 
-    # Calculate x and y offsets based on points of interest in `Tile`
-    offset = _compute_offset(position, adjacent_grid_a, adjacent_grid_b)
 
+def _compute_offset(
+    position: RelativePosition,
+    grid_a: GridLineIntersections,
+    grid_b: GridLineIntersections,
+) -> np.ndarray:
+    if position == RelativePosition.ABOVE:
+        offset = grid_a.top_left - grid_b.bottom_left
+    elif position == RelativePosition.BELOW:
+        offset = grid_a.bottom_left - grid_b.top_left
+    elif position == RelativePosition.LEFT:
+        offset = grid_a.top_left - grid_b.top_right
+    elif position == RelativePosition.RIGHT:
+        offset = grid_a.top_right - grid_b.top_left
+    elif position == RelativePosition.ABOVE_LEFT:
+        offset = grid_a.top_left - grid_b.bottom_right
+    elif position == RelativePosition.ABOVE_RIGHT:
+        offset = grid_a.top_right - grid_b.bottom_left
+    elif position == RelativePosition.BELOW_LEFT:
+        offset = grid_a.bottom_left - grid_b.top_right
+    elif position == RelativePosition.BELOW_RIGHT:
+        offset = grid_a.bottom_right - grid_b.top_left
+    elif position == RelativePosition.CENTER:
+        offset = 0
+    else:
+        raise ValueError(f"Invalid relative position: {position}")
+    return offset
+
+
+def _stitch_tiles(
+    tile_a: Tile, tile_b: Tile, offset: np.ndarray, opacity: float
+) -> Tuple[cv2.typing.MatLike, tuple[int, int], tuple[int, int]]:
     # Extract the calculated offsets
     x_offset, y_offset = offset
     height_a, width_a = tile_a.image().shape[:2]
@@ -74,9 +126,19 @@ def stitch_tiles(tile_a: Tile, tile_b: Tile, cache_dir: str, opacity=1.0) -> Til
     # Assign RGB and alpha values back to canvas
     tile_b_region[:, :, :3] = blended
     tile_b_region[:, :, 3] = combined_alpha
+    return canvas, (x_a, y_a), (x_b, y_b)
 
+
+def _merge_grids(
+    tile_a: Tile,
+    tile_b: Tile,
+    canvas: cv2.typing.MatLike,
+    a_position: tuple[int, int],
+    b_position: tuple[int, int],
+):
     # Adjust tile_a's grid based on its placement offsets on the canvas
     adjusted_grid_a = {}
+    x_a, y_a = a_position
     for mgrs_a, grid_a in tile_a.grid.items():
         adjusted_intersections = GridLineIntersections()
         adjusted_intersections.top_left = _clamp_to_canvas(
@@ -95,6 +157,7 @@ def stitch_tiles(tile_a: Tile, tile_b: Tile, cache_dir: str, opacity=1.0) -> Til
 
     # Adjust tile_b's grid based on its placement offsets on the canvas
     adjusted_grid_b = {}
+    x_b, y_b = b_position
     for mgrs_b, grid_b in tile_b.grid.items():
         adjusted_intersections = GridLineIntersections()
         adjusted_intersections.top_left = _clamp_to_canvas(
@@ -113,41 +176,7 @@ def stitch_tiles(tile_a: Tile, tile_b: Tile, cache_dir: str, opacity=1.0) -> Til
 
     # Merge the adjusted grids
     merged_grid = {**adjusted_grid_a, **adjusted_grid_b}
-
-    # Write the merged image to the disk
-    canvas_path = f"{cache_dir}/{_generate_random_hash()}.npy"
-    np.save(canvas_path, canvas)
-
-    # Create and return a new Tile with the merged image and grid
-    return Tile.from_tile(canvas_path, merged_grid)
-
-
-def _compute_offset(
-    position: RelativePosition,
-    grid_a: GridLineIntersections,
-    grid_b: GridLineIntersections,
-) -> np.ndarray:
-    if position == RelativePosition.ABOVE:
-        offset = grid_a.top_left - grid_b.bottom_left
-    elif position == RelativePosition.BELOW:
-        offset = grid_a.bottom_left - grid_b.top_left
-    elif position == RelativePosition.LEFT:
-        offset = grid_a.top_left - grid_b.top_right
-    elif position == RelativePosition.RIGHT:
-        offset = grid_a.top_right - grid_b.top_left
-    elif position == RelativePosition.ABOVE_LEFT:
-        offset = grid_a.top_left - grid_b.bottom_right
-    elif position == RelativePosition.ABOVE_RIGHT:
-        offset = grid_a.top_right - grid_b.bottom_left
-    elif position == RelativePosition.BELOW_LEFT:
-        offset = grid_a.bottom_left - grid_b.top_right
-    elif position == RelativePosition.BELOW_RIGHT:
-        offset = grid_a.bottom_right - grid_b.top_left
-    elif position == RelativePosition.CENTER:
-        offset = 0
-    else:
-        raise ValueError(f"Invalid relative position: {position}")
-    return offset
+    return merged_grid
 
 
 def _clamp_to_canvas(point, canvas_shape):
@@ -160,10 +189,11 @@ def _clamp_to_canvas(point, canvas_shape):
 
 def _generate_random_hash():
     # Generate a random string
-    random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+    random_string = "".join(random.choices(string.ascii_letters + string.digits, k=16))
     # Create a hash object
     hash_object = hashlib.sha256(random_string.encode())
     return hash_object.hexdigest()
+
 
 def display_result(
     tile: Tile, filename: str = "output.png", window_name: str = "Image Overlay"
