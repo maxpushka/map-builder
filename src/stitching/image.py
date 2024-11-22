@@ -155,6 +155,16 @@ def _clamp_to_canvas(point, canvas_shape):
     )
 
 
+def display_result(
+    tile: Tile, filename: str = "output.png", window_name: str = "Image Overlay"
+):
+    cv2.imshow(window_name, tile.image())
+    key = cv2.waitKey(0) & 0xFF
+    cv2.destroyWindow(window_name)
+    if key == ord("s"):
+        cv2.imwrite(filename, tile.image())
+
+
 if __name__ == "__main__":
     # Load the images and parse coordinates
     # NOTE: download the images manually!
@@ -178,13 +188,6 @@ if __name__ == "__main__":
     tile_d = Tile(name_d, to_mgrs(name_d))
 
     opacity = 1
-
-    def display_result(tile: Tile, filename: str, window_name: str = "Image Overlay"):
-        cv2.imshow(window_name, tile.image())
-        key = cv2.waitKey(0) & 0xFF
-        cv2.destroyWindow(window_name)
-        if key == ord("s"):
-            cv2.imwrite(filename, tile.image())
 
     # Overlay images based on corner alignment
 

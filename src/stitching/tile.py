@@ -29,6 +29,9 @@ class Tile:
         self._do_crop = do_crop
         self.grid = {coord: GridLineIntersections()}
 
+    def __repr__(self):
+        return f"Tile({self._image_path})"
+
     @classmethod
     def from_tile(
         cls,
