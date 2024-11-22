@@ -19,12 +19,16 @@ class GridLineIntersections:
 
 class Tile:
     _image_path: str
+    _image_shape: np.ndarray | None
     _image: cv2.typing.MatLike | None
     _do_crop: bool
     grid: dict[MGRSCoordinate, GridLineIntersections]
 
-    def __init__(self, image_path: str, coord: MGRSCoordinate, do_crop=True):
+    def __init__(
+        self, image_path: str, coord: MGRSCoordinate, image_shape=None, do_crop=True
+    ):
         self._image_path = image_path
+        self._image_shape = image_shape
         self._image = None
         self._do_crop = do_crop
         self.grid = {coord: GridLineIntersections()}
@@ -37,8 +41,14 @@ class Tile:
         cls,
         image_path: str,
         grid: dict[MGRSCoordinate, GridLineIntersections],
+        image_shape=None,
     ):
-        tile = cls(image_path, MGRSCoordinate("", "", 0, 0), do_crop=False)
+        tile = cls(
+            image_path,
+            MGRSCoordinate("", "", 0, 0),
+            image_shape=image_shape,
+            do_crop=False,
+        )
         tile.grid = grid
         return tile
 
@@ -55,10 +65,20 @@ class Tile:
         else:
             raise ValueError(f"Unsupported image format: {self._image_path}")
 
+        self._image_shape = self._image.shape
         if self._do_crop:
             self._crop_image()
-            self._do_crop = False  # Only crop once
         return self._image
+
+    def image_shape(self) -> np.ndarray | None:
+        # return self.image().shape
+        do_offload = False
+        if self._image_shape is None:
+            do_offload = True
+            self.image()
+        if do_offload:
+            self._image = None  # offload image to save memory
+        return self._image_shape
 
     def visualize(self):
         copy_image = self.image().copy()
@@ -118,6 +138,7 @@ class Tile:
         grid.bottom_right -= delta
 
         self._image = cropped_image
+        self._image_shape = cropped_image.shape
         self.grid = {mgrs: grid}
 
         # Add circles to the corners of the cropped image for visualization

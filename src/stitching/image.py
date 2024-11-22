@@ -13,8 +13,8 @@ from tile import GridLineIntersections, Tile
 def stitch_tiles(tile_a: Tile, tile_b: Tile, cache_dir: str, opacity=1.0) -> Tile:
     # Ensure the larger tile is always first
     if (
-        tile_a.image().shape[0] * tile_a.image().shape[1]
-        < tile_b.image().shape[0] * tile_b.image().shape[1]
+        tile_a.image_shape()[0] * tile_a.image_shape()[1]
+        < tile_b.image_shape()[0] * tile_b.image_shape()[1]
     ):
         tile_a, tile_b = tile_b, tile_a
 
@@ -36,7 +36,7 @@ def stitch_tiles(tile_a: Tile, tile_b: Tile, cache_dir: str, opacity=1.0) -> Til
     cv2.imwrite(canvas_path.replace(".npy", ".png"), canvas)
 
     # Create and return a new Tile with the merged image and grid
-    return Tile.from_tile(canvas_path, merged_grid)
+    return Tile.from_tile(canvas_path, merged_grid, image_shape=canvas.shape)
 
 
 def _find_intersection(
@@ -91,8 +91,8 @@ def _stitch_tiles(
 ) -> Tuple[cv2.typing.MatLike, tuple[int, int], tuple[int, int]]:
     # Extract the calculated offsets
     x_offset, y_offset = offset
-    height_a, width_a = tile_a.image().shape[:2]
-    height_b, width_b = tile_b.image().shape[:2]
+    height_a, width_a = tile_a.image_shape()[:2]
+    height_b, width_b = tile_b.image_shape()[:2]
 
     # Calculate the bounding box of the final canvas
     canvas_width = (
@@ -217,9 +217,14 @@ def _generate_random_hash():
 
 
 def display_result(
-    tile: Tile, filename: str = "output.png", window_name: str = "Image Overlay"
+    tile: Tile | cv2.typing.MatLike = None,
+    filename: str = "output.png",
+    window_name: str = "Image Overlay",
 ):
-    cv2.imshow(window_name, tile.image())
+    if isinstance(tile, cv2.typing.MatLike):
+        cv2.imshow(window_name, tile)
+    else:
+        cv2.imshow(window_name, tile.image())
     key = cv2.waitKey(0) & 0xFF
     cv2.destroyWindow(window_name)
     if key == ord("s"):

@@ -74,7 +74,9 @@ def walk_tree(tree: Dict, stitch_multiple_tiles, cache_dir: str) -> Tile:
     Recursively traverse the tree and reduce it to a single Tile while logging progress.
     """
     total_tasks = count_leaves(tree)
-    progress = {"completed": 0}  # Use a mutable object to allow modification within nested scopes
+    progress = {
+        "completed": 0
+    }  # Use a mutable object to allow modification within nested scopes
 
     def walk(tree: Dict) -> Tile:
         if not isinstance(tree, dict):
@@ -144,16 +146,26 @@ def stitch_multiple_tiles(tiles: List[Tile], cache_dir: str) -> Tile:
             for j in range(len(tiles)):
                 other_tile = tiles[j]
                 
+
                 # Check adjacency by comparing grids from both tiles
                 for current_grid_key in current_tile.grid.keys():
                     for other_grid_key in other_tile.grid.keys():
-                        print('relation: computing...')
+                        print("relation: computing...")
                         relation = current_grid_key.position(other_grid_key)
                         print(f"relation: {relation}")
-                        if relation in [RelativePosition.ABOVE, RelativePosition.BELOW, RelativePosition.LEFT, RelativePosition.RIGHT]:                            # Merge the tiles if they are adjacent
+                        if relation in [
+                            RelativePosition.ABOVE,
+                            RelativePosition.BELOW,
+                            RelativePosition.LEFT,
+                            RelativePosition.RIGHT,
+                        ]:  # Merge the tiles if they are adjacent
                             print("Stitched!")
-                            stitched_tile = stitch_tiles(current_tile, other_tile, cache_dir)
-                            tiles[j] = stitched_tile  # Replace the other_tile with the stitched_tile
+                            stitched_tile = stitch_tiles(
+                                current_tile, other_tile, cache_dir
+                            )
+                            tiles[j] = (
+                                stitched_tile  # Replace the other_tile with the stitched_tile
+                            )
                             merge_success = True
                             merged = True
                             break
@@ -172,11 +184,12 @@ def stitch_multiple_tiles(tiles: List[Tile], cache_dir: str) -> Tile:
 
         # If no merges occurred in this pass, raise an error
         if not merged:
-            raise ValueError("Some tiles could not be merged. Check for gaps or invalid positioning.")
+            raise ValueError(
+                "Some tiles could not be merged. Check for gaps or invalid positioning."
+            )
 
     # Return the final merged tile
     return tiles[0]
-
 
 
 # Example usage

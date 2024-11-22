@@ -198,7 +198,7 @@ def merge_all_zones(zone_merged: RDD[Tile]) -> Union[Tile, None]:
 # Main function to orchestrate the pipeline
 def main():
     # Step 1: Load and parse tiles
-    tiles_rdd = load_and_parse_tiles("s3a://dcs-map-builder-20241117/test/")
+    tiles_rdd = load_and_parse_tiles("s3a://dcs-map-builder-20241117/raw/")
 
     # Step 2: Merge 1km blocks into 10km blocks
     km_10_merged = merge_1km_to_10km(tiles_rdd)
