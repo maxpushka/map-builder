@@ -110,9 +110,21 @@ def _stitch_tiles(
     x_a, y_a = max(-x_offset, 0), max(-y_offset, 0)
     canvas_a[y_a : y_a + height_a, x_a : x_a + width_a] = tile_a.image()
 
-    # Place tile_b on canvas_b
+    # Place tile_b on canvas_b with bounds checking
     x_b, y_b = x_a + x_offset, y_a + y_offset
-    canvas_b[y_b : y_b + height_b, x_b : x_b + width_b] = tile_b.image()
+    x_b_start = max(x_b, 0)
+    y_b_start = max(y_b, 0)
+    x_b_end = min(x_b + width_b, canvas_width)
+    y_b_end = min(y_b + height_b, canvas_height)
+
+    tile_b_x_start = max(0, -x_b)
+    tile_b_y_start = max(0, -y_b)
+    tile_b_x_end = tile_b_x_start + (x_b_end - x_b_start)
+    tile_b_y_end = tile_b_y_start + (y_b_end - y_b_start)
+
+    canvas_b[y_b_start:y_b_end, x_b_start:x_b_end] = tile_b.image()[
+        tile_b_y_start:tile_b_y_end, tile_b_x_start:tile_b_x_end
+    ]
 
     # Merge the two canvases so that non-alpha pixels from canvas_b overwrite those in canvas_a
     blended_canvas = canvas_a.copy()
