@@ -90,57 +90,56 @@ def walk_tree(tree: Dict, stitch_multiple_tiles, cache_dir: str) -> Tile:
 
 def stitch_multiple_tiles(tiles: List[Tile], cache_dir: str) -> Tile:
     """
-    Merges a list of tiles into a single tile, ensuring that indirectly adjacent tiles
-    are merged correctly after iterations.
+    Iteratively merges a list of tiles into a single tile by stitching adjacent tiles together.
+    If tiles are not immediately adjacent, merging may make them adjacent in subsequent iterations.
+    
+    Args:
+        tiles: List of Tile objects to be stitched together.
+        cache_dir: Directory to cache intermediate results.
 
-    :param tiles: A list of Tile objects to be stitched together.
-    :param cache_dir: Directory to store intermediate results.
-    :return: A single Tile object resulting from stitching all input tiles.
+    Returns:
+        A single Tile object representing the merged result.
     """
     if len(tiles) == 1:
-        return tiles[0]  # If only one tile, return it as is.
+        # If there's only one tile, return it as is.
+        return tiles[0]
 
-    # Helper function to check adjacency and stitch two tiles
-    def find_and_merge(tiles: List[Tile]) -> List[Tile]:
-        merged = []
+    merged_tiles = tiles[:]
+    while len(merged_tiles) > 1:
+        new_merged_tiles = []
         used_indices = set()
 
-        for i, tile_a in enumerate(tiles):
+        for i in range(len(merged_tiles)):
             if i in used_indices:
                 continue
-            for j, tile_b in enumerate(tiles):
-                if i != j and j not in used_indices:
-                    position = (
-                        tile_a.grid.keys()
-                        .__iter__()
-                        .__next__()
-                        .position(tile_b.grid.keys().__iter__().__next__())
-                    )
-                    if position not in [
-                        RelativePosition.ABOVE,
-                        RelativePosition.BELOW,
-                        RelativePosition.LEFT,
-                        RelativePosition.RIGHT,
-                        RelativePosition.CENTER,
-                    ]:
-                        continue
-                    merged_tile = stitch_tiles(tile_a, tile_b, cache_dir)
-                    # display_result(merged_tile)
-                    used_indices.update([i, j])
-                    merged.append(merged_tile)
-                    break
-            else:
-                # If not merged, keep the tile for the next iteration
-                if i not in used_indices:
-                    merged.append(tile_a)
-        return merged
 
-    # Iteratively merge tiles until only one tile remains
-    current_tiles = tiles
-    while len(current_tiles) > 1:
-        current_tiles = find_and_merge(current_tiles)
+            current_tile = merged_tiles[i]
+            merged = False
 
-    return current_tiles[0]
+            for j in range(i + 1, len(merged_tiles)):
+                if j in used_indices:
+                    continue
+
+                other_tile = merged_tiles[j]
+                relation = current_tile.grid.keys().__iter__().__next__().position(
+                    other_tile.grid.keys().__iter__().__next__()
+                )
+                if relation != RelativePosition.NO_RELATION:
+                    # Stitch tiles if they are adjacent
+                    current_tile = stitch_tiles(current_tile, other_tile, cache_dir)
+                    used_indices.add(j)
+                    merged = True
+
+            new_merged_tiles.append(current_tile)
+            used_indices.add(i)
+
+        # Check if no merges happened; this could indicate an error in positioning logic
+        if len(new_merged_tiles) == len(merged_tiles):
+            raise ValueError("Some tiles could not be merged. Check for gaps or invalid positioning.")
+
+        merged_tiles = new_merged_tiles
+
+    return merged_tiles[0]
 
 
 # Example usage
