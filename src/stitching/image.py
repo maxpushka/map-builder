@@ -94,7 +94,7 @@ def _stitch_tiles(
     height_a, width_a = tile_a.image().shape[:2]
     height_b, width_b = tile_b.image().shape[:2]
 
-    # Calculate the bounding box of the combined image
+    # Calculate the bounding box of the final canvas
     canvas_width = (
         max(width_a, width_a + x_offset) if x_offset > 0 else width_a - x_offset
     )
@@ -102,41 +102,40 @@ def _stitch_tiles(
         max(height_a, height_a + y_offset) if y_offset > 0 else height_a - y_offset
     )
 
-    # Create a blank canvas with the calculated dimensions and 4 channels (RGBA),
-    # and initialize it as fully transparent
-    canvas = np.zeros((canvas_height, canvas_width, 4), dtype=np.uint8)
+    # Create two blank canvases for tile_a and tile_b with the same dimensions
+    canvas_a = np.zeros((canvas_height, canvas_width, 4), dtype=np.uint8)
+    canvas_b = np.zeros((canvas_height, canvas_width, 4), dtype=np.uint8)
 
-    # Place tile_a on the canvas, adjusting for negative offsets
-    x_a, y_a = (max(-x_offset, 0), max(-y_offset, 0))
-    canvas[y_a : y_a + height_a, x_a : x_a + width_a] = tile_a.image()
+    # Place tile_a on canvas_a
+    x_a, y_a = max(-x_offset, 0), max(-y_offset, 0)
+    canvas_a[y_a : y_a + height_a, x_a : x_a + width_a] = tile_a.image()
 
-    # Calculate the position to place tile_b on the canvas based on offsets
-    x_b, y_b = (x_a + x_offset, y_a + y_offset)
+    # Place tile_b on canvas_b
+    x_b, y_b = x_a + x_offset, y_a + y_offset
+    canvas_b[y_b : y_b + height_b, x_b : x_b + width_b] = tile_b.image()
 
-    # Overlay tile_b on the canvas at the calculated position with specified opacity
-    tile_b_region = canvas[y_b : y_b + height_b, x_b : x_b + width_b]
-    blended = cv2.addWeighted(
-        tile_b_region[:, :, :3], 1 - opacity, tile_b.image()[:, :, :3], opacity, 0
+    # Blend the two canvases
+    blended_rgb = cv2.addWeighted(
+        canvas_a[:, :, :3], 1 - opacity, canvas_b[:, :, :3], opacity, 0
     )
 
-    # Combine alpha channel of tile_b with existing canvas alpha
-    alpha_b = tile_b.image()[:, :, 3] * opacity
-    alpha_existing = tile_b_region[:, :, 3] * (1 - opacity)
-    combined_alpha = np.clip(alpha_b + alpha_existing, 0, 255)
+    # Combine the alpha channels
+    alpha_a = canvas_a[:, :, 3] * (1 - opacity)
+    alpha_b = canvas_b[:, :, 3] * opacity
+    blended_alpha = np.clip(alpha_a + alpha_b, 0, 255).astype(np.uint8)
 
-    # Assign RGB and alpha values back to canvas
-    tile_b_region[:, :, :3] = blended
-    tile_b_region[:, :, 3] = combined_alpha
+    # Merge the blended RGB and alpha channels
+    blended_canvas = np.dstack((blended_rgb, blended_alpha))
 
-    # Crop the image to remove free space (alpha mask)
-    alpha_channel = canvas[:, :, 3]
+    # Crop the blended canvas to remove transparent areas
+    alpha_channel = blended_canvas[:, :, 3]
     non_empty_rows = np.nonzero(alpha_channel.max(axis=1))[0]
     non_empty_cols = np.nonzero(alpha_channel.max(axis=0))[0]
 
     if non_empty_rows.size > 0 and non_empty_cols.size > 0:
         crop_top, crop_bottom = non_empty_rows[0], non_empty_rows[-1] + 1
         crop_left, crop_right = non_empty_cols[0], non_empty_cols[-1] + 1
-        cropped_canvas = canvas[crop_top:crop_bottom, crop_left:crop_right]
+        cropped_canvas = blended_canvas[crop_top:crop_bottom, crop_left:crop_right]
         return (
             cropped_canvas,
             (x_a - crop_left, y_a - crop_top),
@@ -144,7 +143,8 @@ def _stitch_tiles(
         )
     else:
         # If no non-transparent pixels are found, return an empty canvas
-        return canvas, (x_a, y_a), (x_b, y_b)
+        return blended_canvas, (x_a, y_a), (x_b, y_b)
+
 
 
 def _merge_grids(
