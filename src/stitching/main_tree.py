@@ -181,10 +181,12 @@ def stitch_multiple_tiles(tiles: List[Tile], cache_dir: str) -> Tile:
 
 # Example usage
 if __name__ == "__main__":
-    CACHE_DIR = "./cache"
+    ROOT_DIR = "."
+    
+    CACHE_DIR = f"{ROOT_DIR}/cache"
     os.makedirs(CACHE_DIR, exist_ok=True)
-    DATA_DIR = "./images"
 
+    DATA_DIR = f"{ROOT_DIR}/images"
     tree = build_tree(DATA_DIR)
     print("Organized Tree:")
     print_tree(tree)

@@ -224,13 +224,15 @@ def display_result(
 
 
 if __name__ == "__main__":
+    ROOT_DIR = "."
+    
     # Load the images and parse coordinates
     # NOTE: download the images manually!
     # They're not provided in the repo.
-    CACHE_DIR = "./cache"
+    CACHE_DIR = f"{ROOT_DIR}/cache"
     os.makedirs(CACHE_DIR, exist_ok=True)
 
-    DATA_DIR = "./images"
+    DATA_DIR = f"{ROOT_DIR}/images"
     name_a = f"{DATA_DIR}/37TFJ0050000500.png"
     name_b = f"{DATA_DIR}/37TFJ0050001500.png"
     name_c = f"{DATA_DIR}/37TFJ0150000500.png"
