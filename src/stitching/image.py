@@ -33,6 +33,7 @@ def stitch_tiles(tile_a: Tile, tile_b: Tile, cache_dir: str, opacity=1.0) -> Til
     # Write the merged image to the disk to avoid keeping it in memory
     canvas_path = f"{cache_dir}/{_generate_random_hash()}.npy"
     np.save(canvas_path, canvas)
+    cv2.imwrite(canvas_path.replace('.npy', '.png'), canvas)
 
     # Create and return a new Tile with the merged image and grid
     return Tile.from_tile(canvas_path, merged_grid)

@@ -71,28 +71,56 @@ def print_tree(tree: Dict, level=0):
 
 def walk_tree(tree: Dict, stitch_multiple_tiles, cache_dir: str) -> Tile:
     """
-    Recursively traverse the tree and reduce it to a single Tile by applying stitch_multiple_tiles
-    on the leaf nodes and propagating upward.
+    Recursively traverse the tree and reduce it to a single Tile while logging progress.
+    """
+    total_tasks = count_leaves(tree)
+    progress = {"completed": 0}  # Use a mutable object to allow modification within nested scopes
+
+    def walk(tree: Dict) -> Tile:
+        if not isinstance(tree, dict):
+            # If tree is not a dict, it's a leaf node; assume it's a list of Tile objects.
+            progress["completed"] += len(tree)
+            print(f"Progress: {progress['completed']}/{total_tasks} tasks completed")
+            return stitch_multiple_tiles(tree, cache_dir)
+
+        # Traverse all branches and replace their subtrees with the stitched results
+        reduced_tree = {}
+        for key, subtree in tree.items():
+            reduced_tree[key] = walk(subtree)
+
+        # At this level, stitch the results of all branches to produce a single Tile
+        stitched_tile = stitch_multiple_tiles(list(reduced_tree.values()), cache_dir)
+        return stitched_tile
+
+    # Start walking the tree
+    return walk(tree)
+
+
+def count_leaves(tree: Dict) -> int:
+    """
+    Count the total number of leaf nodes in the tree.
+
+    Args:
+        tree: Nested dictionary representing the tree structure.
+
+    Returns:
+        Total number of leaf nodes.
     """
     if not isinstance(tree, dict):
-        # If tree is not a dict, it's a leaf node; assume it's a list of Tile objects.
-        return stitch_multiple_tiles(tree, cache_dir)
+        # If the tree is not a dict, it's a list of leaf nodes.
+        return len(tree)
 
-    # Traverse all branches and replace their subtrees with the stitched results
-    reduced_tree = {}
-    for key, subtree in tree.items():
-        reduced_tree[key] = walk_tree(subtree, stitch_multiple_tiles, cache_dir)
-
-    # At this level, stitch the results of all branches to produce a single Tile
-    stitched_tile = stitch_multiple_tiles(list(reduced_tree.values()), cache_dir)
-    return stitched_tile
+    total_leaves = 0
+    for subtree in tree.values():
+        total_leaves += count_leaves(subtree)
+    return total_leaves
 
 
 def stitch_multiple_tiles(tiles: List[Tile], cache_dir: str) -> Tile:
     """
     Iteratively merges a list of tiles into a single tile by stitching adjacent tiles together.
-    If tiles are not immediately adjacent, merging may make them adjacent in subsequent iterations.
-    
+    Tiles are popped from the list and put back if they can't be merged immediately.
+
     Args:
         tiles: List of Tile objects to be stitched together.
         cache_dir: Directory to cache intermediate results.
@@ -104,42 +132,51 @@ def stitch_multiple_tiles(tiles: List[Tile], cache_dir: str) -> Tile:
         # If there's only one tile, return it as is.
         return tiles[0]
 
-    merged_tiles = tiles[:]
-    while len(merged_tiles) > 1:
-        new_merged_tiles = []
-        used_indices = set()
+    while len(tiles) > 1:
+        i = 0
+        merged = False
 
-        for i in range(len(merged_tiles)):
-            if i in used_indices:
+        while len(tiles) != 1:
+            print(f"len tiles: {i, len(tiles), i < len(tiles)}")
+            current_tile = tiles.pop(i)
+            merge_success = False
+
+            for j in range(len(tiles)):
+                other_tile = tiles[j]
+                
+                # Check adjacency by comparing grids from both tiles
+                for current_grid_key in current_tile.grid.keys():
+                    for other_grid_key in other_tile.grid.keys():
+                        print('relation: computing...')
+                        relation = current_grid_key.position(other_grid_key)
+                        print(f"relation: {relation}")
+                        if relation in [RelativePosition.ABOVE, RelativePosition.BELOW, RelativePosition.LEFT, RelativePosition.RIGHT]:                            # Merge the tiles if they are adjacent
+                            print("Stitched!")
+                            stitched_tile = stitch_tiles(current_tile, other_tile, cache_dir)
+                            tiles[j] = stitched_tile  # Replace the other_tile with the stitched_tile
+                            merge_success = True
+                            merged = True
+                            break
+                    if merge_success:
+                        break  # Exit the grid comparison loop after a successful merge
+
+                if merge_success:
+                    break  # Exit the tile comparison loop after a successful merge
+
+            if not merge_success:
+                # If the current tile couldn't be merged, put it back at the end of the list
+                tiles.append(current_tile)
+            else:
+                # Only move to the next tile if no merge occurred
                 continue
 
-            current_tile = merged_tiles[i]
-            merged = False
-
-            for j in range(i + 1, len(merged_tiles)):
-                if j in used_indices:
-                    continue
-
-                other_tile = merged_tiles[j]
-                relation = current_tile.grid.keys().__iter__().__next__().position(
-                    other_tile.grid.keys().__iter__().__next__()
-                )
-                if relation != RelativePosition.NO_RELATION:
-                    # Stitch tiles if they are adjacent
-                    current_tile = stitch_tiles(current_tile, other_tile, cache_dir)
-                    used_indices.add(j)
-                    merged = True
-
-            new_merged_tiles.append(current_tile)
-            used_indices.add(i)
-
-        # Check if no merges happened; this could indicate an error in positioning logic
-        if len(new_merged_tiles) == len(merged_tiles):
+        # If no merges occurred in this pass, raise an error
+        if not merged:
             raise ValueError("Some tiles could not be merged. Check for gaps or invalid positioning.")
 
-        merged_tiles = new_merged_tiles
+    # Return the final merged tile
+    return tiles[0]
 
-    return merged_tiles[0]
 
 
 # Example usage
