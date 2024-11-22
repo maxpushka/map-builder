@@ -126,7 +126,24 @@ def _stitch_tiles(
     # Assign RGB and alpha values back to canvas
     tile_b_region[:, :, :3] = blended
     tile_b_region[:, :, 3] = combined_alpha
-    return canvas, (x_a, y_a), (x_b, y_b)
+
+    # Crop the image to remove free space (alpha mask)
+    alpha_channel = canvas[:, :, 3]
+    non_empty_rows = np.nonzero(alpha_channel.max(axis=1))[0]
+    non_empty_cols = np.nonzero(alpha_channel.max(axis=0))[0]
+
+    if non_empty_rows.size > 0 and non_empty_cols.size > 0:
+        crop_top, crop_bottom = non_empty_rows[0], non_empty_rows[-1] + 1
+        crop_left, crop_right = non_empty_cols[0], non_empty_cols[-1] + 1
+        cropped_canvas = canvas[crop_top:crop_bottom, crop_left:crop_right]
+        return (
+            cropped_canvas,
+            (x_a - crop_left, y_a - crop_top),
+            (x_b - crop_left, y_b - crop_top),
+        )
+    else:
+        # If no non-transparent pixels are found, return an empty canvas
+        return canvas, (x_a, y_a), (x_b, y_b)
 
 
 def _merge_grids(
