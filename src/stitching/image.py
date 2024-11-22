@@ -33,7 +33,7 @@ def stitch_tiles(tile_a: Tile, tile_b: Tile, cache_dir: str, opacity=1.0) -> Til
     # Write the merged image to the disk to avoid keeping it in memory
     canvas_path = f"{cache_dir}/{_generate_random_hash()}.npy"
     np.save(canvas_path, canvas)
-    cv2.imwrite(canvas_path.replace('.npy', '.png'), canvas)
+    cv2.imwrite(canvas_path.replace(".npy", ".png"), canvas)
 
     # Create and return a new Tile with the merged image and grid
     return Tile.from_tile(canvas_path, merged_grid)
@@ -114,18 +114,10 @@ def _stitch_tiles(
     x_b, y_b = x_a + x_offset, y_a + y_offset
     canvas_b[y_b : y_b + height_b, x_b : x_b + width_b] = tile_b.image()
 
-    # Blend the two canvases
-    blended_rgb = cv2.addWeighted(
-        canvas_a[:, :, :3], 1 - opacity, canvas_b[:, :, :3], opacity, 0
-    )
-
-    # Combine the alpha channels
-    alpha_a = canvas_a[:, :, 3] * (1 - opacity)
-    alpha_b = canvas_b[:, :, 3] * opacity
-    blended_alpha = np.clip(alpha_a + alpha_b, 0, 255).astype(np.uint8)
-
-    # Merge the blended RGB and alpha channels
-    blended_canvas = np.dstack((blended_rgb, blended_alpha))
+    # Merge the two canvases so that non-alpha pixels from canvas_b overwrite those in canvas_a
+    blended_canvas = canvas_a.copy()
+    alpha_b = canvas_b[:, :, 3] > 0  # Mask where canvas_b has non-transparent pixels
+    blended_canvas[alpha_b] = canvas_b[alpha_b]
 
     # Crop the blended canvas to remove transparent areas
     alpha_channel = blended_canvas[:, :, 3]
@@ -144,7 +136,6 @@ def _stitch_tiles(
     else:
         # If no non-transparent pixels are found, return an empty canvas
         return blended_canvas, (x_a, y_a), (x_b, y_b)
-
 
 
 def _merge_grids(
