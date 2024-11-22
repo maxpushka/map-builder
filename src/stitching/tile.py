@@ -30,7 +30,7 @@ class Tile:
         self.grid = {coord: GridLineIntersections()}
 
     def __repr__(self):
-        return f"Tile({self._image_path})"
+        return f"Tile({self._image_path.split('/')[-1]})"
 
     @classmethod
     def from_tile(

@@ -1,4 +1,7 @@
 import os
+import hashlib
+import random
+import string
 from typing import Callable
 import cv2
 import numpy as np
@@ -112,7 +115,7 @@ def stitch_tiles(tile_a: Tile, tile_b: Tile, cache_dir: str, opacity=1.0) -> Til
     merged_grid = {**adjusted_grid_a, **adjusted_grid_b}
 
     # Write the merged image to the disk
-    canvas_path = f"{cache_dir}/combined_image.npy"
+    canvas_path = f"{cache_dir}/{_generate_random_hash()}.npy"
     np.save(canvas_path, canvas)
 
     # Create and return a new Tile with the merged image and grid
@@ -154,6 +157,13 @@ def _clamp_to_canvas(point, canvas_shape):
         [max(0, min(point[0], x_max - 1)), max(0, min(point[1], y_max - 1))]
     )
 
+
+def _generate_random_hash():
+    # Generate a random string
+    random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+    # Create a hash object
+    hash_object = hashlib.sha256(random_string.encode())
+    return hash_object.hexdigest()
 
 def display_result(
     tile: Tile, filename: str = "output.png", window_name: str = "Image Overlay"
